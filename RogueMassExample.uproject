@@ -1,0 +1,40 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.6",
+	"VersionName": "1.0.0",
+	"Category": "Simulation",
+	"FriendlyName": "Rogue MASS Demo – Trains",
+	"Description": "Spline-driven train + passenger MASS demo",
+	"Modules": [
+		{
+			"Name": "RogueMassExample",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "MassEntity",
+			"Enabled": true
+		},
+		{
+			"Name": "MassAI",
+			"Enabled": true
+		},
+		{
+			"Name": "MassGameplay",
+			"Enabled": true
+		},
+		{
+			"Name": "MassCrowd",
+			"Enabled": true
+		}
+	]
+}
