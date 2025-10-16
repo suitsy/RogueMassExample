@@ -42,6 +42,10 @@
 *.VC.opendb
 .vsconfig
 
+
+# JetBrains IDE
+.idea/
+
 # Precompiled Assets
 SourceArt/**/*.png
 SourceArt/**/*.tga
@@ -49,6 +53,9 @@ SourceArt/**/*.tga
 # Binary Files
 Binaries/*
 Plugins/**/Binaries/*
+Build
+Package
+Plugins/Developer
 
 # Builds
 Build/*
