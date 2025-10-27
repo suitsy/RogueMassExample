@@ -6,6 +6,11 @@
 #include "MassEntityTemplate.h"
 #include "Mass/Fragments/RogueFragments.h"
 #include "Subsystems/WorldSubsystem.h"
+
+#if WITH_EDITOR
+#include "Data/RogueEntityDebugData.h"
+#endif
+
 #include "RogueTrainWorldSubsystem.generated.h"
 
 class UMassEntityConfigAsset;
@@ -42,11 +47,11 @@ struct ROGUEMASSEXAMPLE_API FRogueSpawnRequest
 	int32 RemainingCount = 0;
 
 	// Any
-	FVector SpawnLocation = FVector::ZeroVector;
+	FTransform Transform = FTransform::Identity;
 	float StartAlpha = 0.f; 
 
 	// Station
-	FRogueStationData StationData;
+	FRoguePlatformData PlatformData;
 	int32 StationIdx = INDEX_NONE;
 
 	// Carriage
@@ -82,7 +87,7 @@ public:
 	const TArray<FRogueStationData>& GetStations() const { return StationActorData; }
 
 	// Build shared track fragment
-	void BuildTrackShared();
+	void BuildTrackSharedData(); 
 	void InvalidateTrackShared() { bTrackDirty = true; }
 	const FRogueTrackSharedFragment& GetTrackShared();
 	int32 GetTrackRevision() const { return TrackRevision; }
@@ -108,16 +113,16 @@ protected:
 	void ProcessPendingSpawns();
 
 private:
-	UPROPERTY() TWeakObjectPtr<USplineComponent> TrackSpline;
-	UPROPERTY() TArray<FRogueStationData> StationActorData;
-	UPROPERTY() TArray<FMassEntityHandle> StationEntities;
-	UPROPERTY() TArray<FRogueSpawnRequest> PendingSpawns;
-	UPROPERTY() FRogueTrackSharedFragment CachedTrack;   // cached once, reused everywhere
-	UPROPERTY() int32 TrackRevision = 0;
-	UPROPERTY() bool bTrackDirty = true;
+	TWeakObjectPtr<USplineComponent> TrackSpline;
+	TArray<FRogueStationData> StationActorData;
+	TMap<int32, FMassEntityHandle> StationEntities;
+	TArray<FRoguePlatformData> Platforms;
+	TArray<FRogueSpawnRequest> PendingSpawns;
+	FRogueTrackSharedFragment CachedTrack;
+	int32 TrackRevision = 0;
+	bool bTrackDirty = true;
 	TMap<ERogueEntityType, TArray<FMassEntityHandle>> EntityPool;
 	TMap<ERogueEntityType, TArray<FMassEntityHandle>> WorldEntities;
-	TArray<TPair<float, FMassEntityHandle>> PendingStations;
 	UPROPERTY() UMassEntityConfigAsset* StationConfig = nullptr;
 	UPROPERTY() UMassEntityConfigAsset* TrainConfig = nullptr;
 	UPROPERTY() UMassEntityConfigAsset* CarriageConfig = nullptr;
@@ -136,6 +141,7 @@ private:
 	void DiscoverSplineFromSettings();
 	void GatherStationActors();
 	void CreateStations();
+	void BuildStationPlatformData();
 	void CreateTrains();
 
 	// Cache
@@ -158,4 +164,56 @@ public:
 	int32 GetPoolCount(const ERogueEntityType Type) const { if (const auto* A = EntityPool.Find(Type)) return A->Num(); return 0; }
 	int32 GetTotalLiveCount() const;
 	int32 GetTotalPoolCount() const;
+
+#if WITH_EDITOR
+public:	
+	const TArray<FRogueDebugPassenger>& GetPassengerDebugSnapshot() { return PassengersDebugSnapshot; }
+	int32 GetPassengerDebugSlot() { return NextPassengerDebugSlot++; }
+	int32 GetPassengerDebugCapacity() const { return NextPassengerDebugSlot; }
+	void SetPassengerDebugSnapshot(TArray<FRogueDebugPassenger>&& Snapshot) { PassengersDebugSnapshot = MoveTemp(Snapshot); }
+	
+	const TArray<FRogueDebugTrain>& GetTrainDebugSnapshot() { return TrainsDebugSnapshot; }
+	int32 GetTrainDebugIndex() { return NextTrainDebugSlot++; }
+	int32 GetTrainDebugCapacity() const { return NextTrainDebugSlot; }
+	void SetTrainDebugSnapshot(TArray<FRogueDebugTrain>&& Snapshot) { TrainsDebugSnapshot = MoveTemp(Snapshot); }
+	
+	const TArray<FRogueDebugCarriage>& GetCarriageDebugSnapshot() { return CarriagesDebugSnapshot; }
+	int32 GetCarriageDebugIndex() { return NextCarriageDebugSlot++; }
+	int32 GetCarriageDebugCapacity() const { return NextCarriageDebugSlot; }
+	void SetCarriageDebugSnapshot(TArray<FRogueDebugCarriage>&& Snapshot) { CarriagesDebugSnapshot = MoveTemp(Snapshot); }
+	
+	const TArray<FRogueDebugStation>& GetStationDebugSnapshot() { return StationsDebugSnapshot; }
+	int32 GetStationDebugIndex() { return NextStationDebugSlot++; }
+	int32 GetStationDebugCapacity() const { return NextStationDebugSlot; }
+	void SetStationDebugSnapshot(TArray<FRogueDebugStation>&& Snapshot) { StationsDebugSnapshot = MoveTemp(Snapshot); }
+
+	const TArray<FRogueDebugTrack>& GetTrackDebugSnapshot() { return TracksDebugSnapshot; }
+	//const USplineComponent& GetTrackEntities() const;
+
+	
+
+protected:
+	void InitDebugData();
+	
+private:
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& Event) override;
+
+	FTimerHandle DebugTimerHandle;
+
+	// Debug
+	void DrawDebugStations(const UWorld* InWorld);
+
+	bool bGenerateDebugSnapshot = false;
+
+	TArray<FRogueDebugPassenger> PassengersDebugSnapshot;
+	int32 NextPassengerDebugSlot = 0;
+	TArray<FRogueDebugTrain> TrainsDebugSnapshot;
+	int32 NextTrainDebugSlot = 0;
+	TArray<FRogueDebugCarriage> CarriagesDebugSnapshot;
+	int32 NextCarriageDebugSlot = 0;
+	TArray<FRogueDebugStation> StationsDebugSnapshot;
+	int32 NextStationDebugSlot = 0;
+	TArray<FRogueDebugTrack> TracksDebugSnapshot;
+	
+#endif
 };

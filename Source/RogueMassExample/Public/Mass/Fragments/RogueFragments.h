@@ -46,8 +46,152 @@ enum class ERogueStationTrainPhase : uint8
 	Departing,
 };
 
+USTRUCT(BlueprintType)
+struct FRoguePlatformConfig
+{
+	GENERATED_BODY()
+
+	// Platform extent along its forward axis (cm).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	float PlatformLength = 1000.f;
+
+	// Local offsets relative to the track at this station
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float TrackOffset = 150.f;   // +Right from track to platform edge
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float VerticalOffset = 0.f;    // lift platform up/down
+
+	// How far from the platform center will the spawn points be
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float SpawnPointDistance = 750.f;
+
+	// Waiting point density for passengers
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	int32 WaitingPoints = 10;
+	
+	// Spawn points for passengers
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	int32 SpawnPoints = 2;
+};
+
+USTRUCT(BlueprintType)
+struct FRogueStationWaitingGridConfig
+{
+	GENERATED_BODY()
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	int32 GridCols = 4;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	int32 GridRows = 2;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	float GridColSpacing = 55.f;  // along platform
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	float GridRowSpacing = 45.f;  // away from platform edge (toward interior)
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	float GridEdgeInset  = 80.f;  // away from platform edge (toward interior)
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0"))
+	float GridOffset  = 80.f;
+};
+
+USTRUCT(BlueprintType)
+struct FRogueStationConfig
+{
+	GENERATED_BODY()
+
+	// Normalized parameter on the track [0..1]
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta=(ClampMin="0.0", ClampMax="1.0"))
+	float TrackAlpha = 0.f;
+
+	// Per-station visual/geometry tuning
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	FRoguePlatformConfig PlatformConfig;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	FRogueStationWaitingGridConfig WaitingGridConfig;
+};
+
 USTRUCT()
-struct ROGUEMASSEXAMPLE_API FRogueSplineFollowFragment : public FMassFragment
+struct FRogueWaitingGrid
+{
+	GENERATED_BODY()
+
+	/** World-space slots centers, created once when stations are built */
+	TArray<FVector> SlotPositions;
+
+	/** Who is in each slot, or invalid if free */
+	TArray<FMassEntityHandle> OccupiedBy;
+
+	/** Optional free-list for O(1) allocate/free (otherwise scan OccupiedBy) */
+	TArray<int32> FreeIndices;
+
+	FORCEINLINE bool IsValidSlotIndex(const int32 Idx) const { return SlotPositions.IsValidIndex(Idx); }
+};
+
+USTRUCT()
+struct ROGUEMASSEXAMPLE_API FRoguePassengerQueueEntry
+{
+	GENERATED_BODY()
+
+	FMassEntityHandle Passenger = FMassEntityHandle();
+	FMassEntityHandle DestStation = FMassEntityHandle();
+	int32 WaitingPointIdx = INDEX_NONE;
+	float EnqueuedGameTime = 0.f;
+	int32 Priority = 0;
+};
+
+USTRUCT()
+struct FStationRef
+{
+	GENERATED_BODY()
+	
+	float Alpha = 0.f; 
+	FMassEntityHandle Entity;
+};
+
+USTRUCT()
+struct ROGUEMASSEXAMPLE_API FRogueStationQueueFragment : public FMassFragment
+{
+	GENERATED_BODY()
+	
+	TMap<int32, TArray<FRoguePassengerQueueEntry>> QueuesByWaitingPoint;
+	TMap<int32, FRogueWaitingGrid> Grids;
+	TArray<FVector> WaitingPoints;
+	TArray<FVector> SpawnPoints;	
+	FRogueStationWaitingGridConfig WaitingGridConfig;
+};
+
+USTRUCT()
+struct FRoguePlatformData
+{
+	GENERATED_BODY()
+	
+	// Straight segment representing the platform line in world space
+	FVector Start = FVector::ZeroVector;
+	FVector End = FVector::ZeroVector;
+
+	// Convenience frame at the platform center
+	FVector Center = FVector::ZeroVector;
+	FVector Fwd = FVector::ForwardVector;
+	FVector Right = FVector::RightVector;
+	FVector Up = FVector::UpVector;
+	float DockAlpha = 0.f;
+	float PlatformLength = 1000.f;
+	
+	FTransform World = FTransform::Identity;
+	float Alpha = 0.f;   // normalized [0..1]
+	TArray<FVector> WaitingPoints;
+	TArray<FVector> SpawnPoints;
+	FRogueStationWaitingGridConfig WaitingGridConfig;
+};
+
+USTRUCT()
+struct ROGUEMASSEXAMPLE_API FRogueTrainTrackFollowFragment : public FMassFragment
 {
 	GENERATED_BODY()
 	
@@ -65,6 +209,7 @@ struct ROGUEMASSEXAMPLE_API FRogueStationFragment : public FMassFragment
 	int32 StationIndex = INDEX_NONE;
 	float StationAlpha = 0.f; // [0..1] along track
 	FVector WorldPosition = FVector::ZeroVector;
+	
 };
 
 USTRUCT()
@@ -101,6 +246,8 @@ struct ROGUEMASSEXAMPLE_API FRogueCarriageFragment : public FMassFragment
 	
 	int32 Capacity = 100;
 	TArray<FMassEntityHandle> Occupants;
+	float NextAllowedUnloadTime = 0.f;
+	int32 UnloadCursor = 0; 
 };
 
 USTRUCT()
@@ -111,6 +258,7 @@ struct ROGUEMASSEXAMPLE_API FRoguePassengerFragment : public FMassFragment
 	FMassEntityHandle OriginStation = FMassEntityHandle();       
 	FMassEntityHandle DestinationStation = FMassEntityHandle();
 	int32 WaitingPointIdx = INDEX_NONE;
+	int32 WaitingSlotIdx = INDEX_NONE;
 	int32 CarriageIndex = INDEX_NONE;
 	FMassEntityHandle VehicleHandle;
 	ERoguePassengerPhase Phase = ERoguePassengerPhase::ToStationWaitingPoint;
@@ -129,24 +277,10 @@ struct ROGUEMASSEXAMPLE_API FRoguePassengerHandleFragment : public FMassFragment
 };
 
 USTRUCT()
-struct ROGUEMASSEXAMPLE_API FRoguePassengerQueueEntry
+struct FRogueDebugSlotFragment : public FMassFragment
 {
 	GENERATED_BODY()
-
-	FMassEntityHandle Passenger = FMassEntityHandle();
-	FMassEntityHandle DestStation = FMassEntityHandle();
-	int32 WaitingPointIdx = INDEX_NONE;
-	float EnqueuedGameTime = 0.f;
-	int32 Priority = 0;
-};
-
-USTRUCT()
-struct ROGUEMASSEXAMPLE_API FRogueStationQueueFragment : public FMassFragment
-{
-	GENERATED_BODY()
-	TMap<int32, TArray<FRoguePassengerQueueEntry>> QueuesByWP;
-	TArray<FVector> WaitingPoints;
-	TArray<FVector> SpawnPoints;   
+	int32 Slot = INDEX_NONE;
 };
 
 /** Shared fragments used in the Mass Train Example */
@@ -157,14 +291,16 @@ struct ROGUEMASSEXAMPLE_API FRogueTrackSharedFragment : public FMassSharedFragme
 	
 	TWeakObjectPtr<USplineComponent> Spline;
 	TArray<float> StationTrackAlphas; // sorted [0..1]
-	TArray<FMassEntityHandle> StationEntities;
+	TArray<TPair<float, FMassEntityHandle>> StationEntities;
 	TArray<FVector> StationWorldPositions;
-	float TrackLength = 100000.f;  
+	TArray<FRoguePlatformData> Platforms;
+	float TrackLength = 100000.f;
+	TArray<FStationRef> Stations; 
 
-	FORCEINLINE bool IsValid() const { return Spline.IsValid() && TrackLength > 0.f && StationTrackAlphas.Num() >= 2; }
+	FORCEINLINE bool IsValid() const { return Spline.IsValid() && TrackLength > 0.f && StationTrackAlphas.Num() >= 2 && StationTrackAlphas.Num() == Platforms.Num(); }
 	FORCEINLINE FMassEntityHandle GetStationEntityByIndex(const int32 Index) const
 	{
-		return StationEntities.IsValidIndex(Index) ? StationEntities[Index] : FMassEntityHandle();
+		return StationEntities.IsValidIndex(Index) ? StationEntities[Index].Value : FMassEntityHandle();
 	}
 };
 

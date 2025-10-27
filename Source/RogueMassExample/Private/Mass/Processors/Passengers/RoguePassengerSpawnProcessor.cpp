@@ -6,7 +6,6 @@
 #include "MassExecutionContext.h"
 #include "Data/RogueDeveloperSettings.h"
 #include "Subsystems/RogueTrainWorldSubsystem.h"
-#include "Utilities/RogueTrainUtility.h"
 
 
 URoguePassengerSpawnProcessor::URoguePassengerSpawnProcessor(): EntityQuery(*this)
@@ -42,7 +41,7 @@ void URoguePassengerSpawnProcessor::Execute(FMassEntityManager& EntityManager, F
 	// Cap overall passengers
 	if (TrainSubsystem->GetLiveCount(ERogueEntityType::Passenger) >= Settings->MaxPassengersOverall) return;
 
-	// Generate list of station entities
+	// Generate list of station entities (so we can pick one randomly)
 	TArray<FMassEntityHandle> StationEntities;
 	EntityQuery.ForEachEntityChunk(Context, [&](FMassExecutionContext& SubContext)
 	{
@@ -87,7 +86,7 @@ void URoguePassengerSpawnProcessor::Execute(FMassEntityManager& EntityManager, F
 	Request.Type				= ERogueEntityType::Passenger;
 	Request.EntityTemplate		= PassengerEntityTemplate;
 	Request.RemainingCount		= 1;
-	Request.SpawnLocation		= SpawnLoc;
+	Request.Transform			= FTransform(SpawnLoc);
 	Request.OriginStation		= OriginStation;
 	Request.DestinationStation  = DestinationStation;
 	Request.WaitingPointIdx		= WaitingIdx;

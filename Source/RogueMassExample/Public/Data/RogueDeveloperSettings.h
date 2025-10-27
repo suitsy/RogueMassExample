@@ -4,18 +4,39 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettingsBackedByCVars.h"
+#include "Mass/Fragments/RogueFragments.h"
 #include "RogueDeveloperSettings.generated.h"
 
 class UMassEntityConfigAsset;
-/**
- * 
- */
+
+
+
 UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="Rogue Mass Example"))
 class ROGUEMASSEXAMPLE_API URogueDeveloperSettings : public UDeveloperSettingsBackedByCVars
 {
 	GENERATED_BODY()
 	
 public:
+	/** Simulation Settings */
+
+	/** Actor containing the spline component defining the track layout */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Simulation Settings")
+	TSoftObjectPtr<AActor> TrackSplineActor;
+
+	/** Maximum number of passengers allowed in the simulation at once */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Simulation Settings", meta=(ClampMin="0"))
+	int32 MaxPassengersOverall = 500;
+
+	/** Interval between spawning new passengers */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Simulation Settings", meta=(ClampMin="0"))
+	float SpawnIntervalSeconds = 0.25f;
+	
+	/** Maximum number of entities to spawn per frame to avoid hitches */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Spawning", meta=(ClampMin="1"))
+	int32 MaxSpawnsPerFrame = 64;
+
+	/** Train, Carriage and Passenger Settings */
+	
 	/** Number of trains to simulate */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Trains", meta=(ClampMin="1"))
 	int32 NumTrains = 2;
@@ -35,9 +56,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Carriages", meta=(ClampMin="1.0"))
 	float MaxLoadPerTickPerCarriage = 4.f; 
 
-	/** Maximum rate for passenger unload */
+	/** Passenger unload rate */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Carriages", meta=(ClampMin="1.0"))
-	float MaxUnLoadPerTickPerCarriage = 8.f; 
+	float UnloadIntervalSeconds = 0.25f; 
+
+	/** Passenger unload jitter */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Carriages", meta=(ClampMin="1.0"))
+	float UnloadStartJitter = 0.15f;  
 
 	/** Maximum number of passengers per carriage */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Passengers", meta=(ClampMin="0"))
@@ -57,31 +82,31 @@ public:
 
 	/** Time buffer from allowing boarding to leaving the station */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Stations", meta=(ClampMin="0"))
-	float DepartureTimeSeconds = 2.f;
+	float DepartureTimeSeconds = 2.f;	
 
-	/** Maximum number of passengers allowed in the simulation at once */
-	UPROPERTY(EditDefaultsOnly, Config, Category="Passengers", meta=(ClampMin="0"))
-	int32 MaxPassengersOverall = 500;
-
-	/** Interval between spawning new passengers */
-	UPROPERTY(EditDefaultsOnly, Config, Category="Passengers", meta=(ClampMin="0"))
-	float SpawnIntervalSeconds = 0.25f;
-
-	/** Interval between spawning new passengers */
+	/** Passengers destination acceptance radius */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Passengers", meta=(ClampMin="0"))
 	float PassengerAcceptanceRadius = 20.f;	
+
+	/** Passengers collision radius */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Passengers", meta=(ClampMin="0"))
+	float PassengerRadius = 10.f;	
 
 	/** Interval between spawning new passengers */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Passengers", meta=(ClampMin="0"))
 	float PassengerMaxSpeed = 200.f;
 
-	/** Actor containing the spline component defining the track layout */
-	UPROPERTY(EditDefaultsOnly, Config, Category="Track")
-	TSoftObjectPtr<AActor> TrackSplineActor;
+	// Station list
+	UPROPERTY(EditAnywhere, Config, Category="Stations")
+	TArray<FRogueStationConfig> Stations;
 
 	/** Radius around a station where trains begin to slow down */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Stations")
 	float StationStopRadius = 600.f;
+
+	/** Radius a train will stop at a station from a docking point*/
+	UPROPERTY(EditDefaultsOnly, Config, Category="Stations")
+	float StationArrivalRadius = 50.f;
 
 	// Station / Train / Passenger templates
 	UPROPERTY(EditDefaultsOnly, Config, Category="Entity Templates")
@@ -97,6 +122,14 @@ public:
 	TSoftObjectPtr<UMassEntityConfigAsset> PassengerConfig = nullptr;
 
 	// Spawn throttle
-	UPROPERTY(EditDefaultsOnly, Config, Category="Spawning", meta=(ClampMin="1"))
-	int32 MaxSpawnsPerFrame = 64;
+
+	// Debugging
+	UPROPERTY(EditDefaultsOnly, Config, Category="Debug|Stations")
+	bool bDrawStationSpawnPoints = false;
+	
+	UPROPERTY(EditDefaultsOnly, Config, Category="Debug|Stations")
+	bool bDrawStationWaitPoints = false;
+	
+	UPROPERTY(EditDefaultsOnly, Config, Category="Debug|Stations")
+	bool bDrawStationWaitGrid = false;
 };

@@ -19,7 +19,7 @@ URogueTrainEngineMovementProcessor::URogueTrainEngineMovementProcessor() : Entit
 
 void URogueTrainEngineMovementProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
-	EntityQuery.AddRequirement<FRogueSplineFollowFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
+	EntityQuery.AddRequirement<FRogueTrainTrackFollowFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
 	EntityQuery.AddRequirement<FRogueTrainStateFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);	
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
 	EntityQuery.AddTagRequirement<FRogueTrainEngineTag>(EMassFragmentPresence::All);
@@ -40,7 +40,7 @@ void URogueTrainEngineMovementProcessor::Execute(FMassEntityManager& EntityManag
 
 	EntityQuery.ForEachEntityChunk(Context, [&](FMassExecutionContext& SubContext)
 	{
-		const auto FollowView = SubContext.GetMutableFragmentView<FRogueSplineFollowFragment>();
+		const auto FollowView = SubContext.GetMutableFragmentView<FRogueTrainTrackFollowFragment>();
 		const auto StateView  = SubContext.GetMutableFragmentView<FRogueTrainStateFragment>();
 		const auto TransformView = SubContext.GetMutableFragmentView<FTransformFragment>();
 

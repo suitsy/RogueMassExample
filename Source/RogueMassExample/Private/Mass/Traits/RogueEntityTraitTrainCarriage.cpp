@@ -9,7 +9,7 @@ void URogueEntityTraitTrainCarriage::BuildTemplate(FMassEntityTemplateBuildConte
                                                    const UWorld& World) const
 {
 	BuildContext.AddTag<FRogueTrainCarriageTag>();
-	BuildContext.AddFragment<FRogueSplineFollowFragment>();
+	BuildContext.AddFragment<FRogueTrainTrackFollowFragment>();
 	BuildContext.AddFragment<FRogueTrainLinkFragment>();
 	BuildContext.AddFragment<FRogueCarriageFragment>();
 }

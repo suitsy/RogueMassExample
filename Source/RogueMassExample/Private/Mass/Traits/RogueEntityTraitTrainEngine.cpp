@@ -8,6 +8,6 @@
 void URogueEntityTraitTrainEngine::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const
 {
 	BuildContext.AddTag<FRogueTrainEngineTag>();
-	BuildContext.AddFragment<FRogueSplineFollowFragment>();
+	BuildContext.AddFragment<FRogueTrainTrackFollowFragment>();
 	BuildContext.AddFragment<FRogueTrainStateFragment>();
 }

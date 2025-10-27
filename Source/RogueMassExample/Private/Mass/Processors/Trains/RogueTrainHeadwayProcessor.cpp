@@ -17,7 +17,7 @@ URogueTrainHeadwayProcessor::URogueTrainHeadwayProcessor(): EntityQuery(*this)
 
 void URogueTrainHeadwayProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
-	EntityQuery.AddRequirement<FRogueSplineFollowFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddRequirement<FRogueTrainTrackFollowFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddRequirement<FRogueTrainStateFragment>( EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddTagRequirement<FRogueTrainEngineTag>(EMassFragmentPresence::All);
 	EntityQuery.RegisterWithProcessor(*this);
@@ -46,7 +46,7 @@ void URogueTrainHeadwayProcessor::Execute(FMassEntityManager& EntityManager, FMa
 
 	EntityQuery.ForEachEntityChunk(Context, [&](FMassExecutionContext& SubContext)
 	{
-		const TConstArrayView<FRogueSplineFollowFragment> FollowView = SubContext.GetFragmentView<FRogueSplineFollowFragment>();
+		const TConstArrayView<FRogueTrainTrackFollowFragment> FollowView = SubContext.GetFragmentView<FRogueTrainTrackFollowFragment>();
 		const TArrayView<FRogueTrainStateFragment> StateView = SubContext.GetMutableFragmentView<FRogueTrainStateFragment>();	
 
 		for (int32 i = 0; i < SubContext.GetNumEntities(); ++i)

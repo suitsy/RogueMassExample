@@ -21,7 +21,7 @@ URogueTrainCarriageFollowProcessor::URogueTrainCarriageFollowProcessor() : Entit
 
 void URogueTrainCarriageFollowProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
-	EntityQuery.AddRequirement<FRogueSplineFollowFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FRogueTrainTrackFollowFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
 	EntityQuery.AddRequirement<FRogueTrainLinkFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddTagRequirement<FRogueTrainCarriageTag>(EMassFragmentPresence::All);
@@ -42,7 +42,7 @@ void URogueTrainCarriageFollowProcessor::Execute(FMassEntityManager& EntityManag
 
 	EntityQuery.ForEachEntityChunk(Context, [&](FMassExecutionContext& SubContext)
 	{
-		const auto FollowView = SubContext.GetMutableFragmentView<FRogueSplineFollowFragment>();
+		const auto FollowView = SubContext.GetMutableFragmentView<FRogueTrainTrackFollowFragment>();
 		const auto LinkView = SubContext.GetFragmentView<FRogueTrainLinkFragment>();
 		const auto TransformView = SubContext.GetMutableFragmentView<FTransformFragment>();
 
@@ -52,7 +52,7 @@ void URogueTrainCarriageFollowProcessor::Execute(FMassEntityManager& EntityManag
 			if (!Link.LeadHandle.IsSet() || !EntityManager.IsEntityValid(Link.LeadHandle))
 				continue;
 	
-			const FRogueSplineFollowFragment* LeadFollow = EntityManager.GetFragmentDataPtr<FRogueSplineFollowFragment>(Link.LeadHandle);
+			const FRogueTrainTrackFollowFragment* LeadFollow = EntityManager.GetFragmentDataPtr<FRogueTrainTrackFollowFragment>(Link.LeadHandle);
 			if (!LeadFollow) continue;			
 
 			RogueTrainUtility::FSplineStationSample SplineSample;

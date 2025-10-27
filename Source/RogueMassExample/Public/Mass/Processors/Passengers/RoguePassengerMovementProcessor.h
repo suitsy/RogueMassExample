@@ -29,8 +29,8 @@ protected:
 	FMassEntityQuery EntityQuery;
 
 private:
-	static void AssignWaitingPoint(const FMassEntityManager& EntityManager, FRoguePassengerFragment& PassengerFragment);
-	static void MoveToTarget(FMassMoveTargetFragment& MoveTarget, const FMassMovementParameters& MoveParams,const FTransform& PTransform, const FVector& TargetDestination);
+	static void AssignWaitingPoint(const FMassEntityManager& EntityManager, FRoguePassengerFragment& PassengerFragment, const FMassEntityHandle& Entity);
+	static void MoveToTarget(const FRoguePassengerFragment& PassengerFragment, FMassMoveTargetFragment& MoveTarget, const FMassMovementParameters& MoveParams,const FTransform& PTransform, const FVector& TargetDestination);
 	static void ToStationWaitingPoint(const FMassEntityManager& EntityManager, FRoguePassengerFragment& PassengerFragment,
 		const FTransform& PTransform, const FMassEntityHandle PassengerHandle, const float Time);
 	static void ToAssignedCarriage(const FMassEntityManager& EntityManager, const FMassExecutionContext& Context, FRoguePassengerFragment& PassengerFragment,
@@ -38,6 +38,6 @@ private:
 	static void UnloadAtStation(const FMassEntityManager& EntityManager, FRoguePassengerFragment& PassengerFragment, const FTransform& PTransform);
 	static void ToPostUnloadWaitingPoint(const FMassEntityManager& EntityManager, FRoguePassengerFragment& PassengerFragment,
 		const FTransform& PTransform);
-	static void ToExitSpawn(URogueTrainWorldSubsystem* TrainSubsystem, const FMassExecutionContext& Context, FRoguePassengerFragment& PassengerFragment,
+	static void ToExitSpawn(const FMassEntityManager& EntityManager, URogueTrainWorldSubsystem* TrainSubsystem, const FMassExecutionContext& Context, FRoguePassengerFragment& PassengerFragment,
 		const FTransform& PTransform, const FMassEntityHandle PassengerHandle);
 };

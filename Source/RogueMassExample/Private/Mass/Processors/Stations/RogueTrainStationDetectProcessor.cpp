@@ -18,7 +18,7 @@ URogueTrainStationDetectProcessor::URogueTrainStationDetectProcessor(): EntityQu
 
 void URogueTrainStationDetectProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
-	EntityQuery.AddRequirement<FRogueSplineFollowFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FRogueTrainTrackFollowFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FRogueTrainStateFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddTagRequirement<FRogueTrainEngineTag>(EMassFragmentPresence::All);
 	EntityQuery.RegisterWithProcessor(*this);
@@ -36,12 +36,11 @@ void URogueTrainStationDetectProcessor::Execute(FMassEntityManager& EntityManage
 	if(!Settings) return;
 	
 	const float StopRadius = Settings ? Settings->StationStopRadius : 600.f;
-	const float LeaveRadius = StopRadius * 1.25f;
-	const float ArriveRadius = 50.f;
+	const float ArriveRadius = Settings ? Settings->StationArrivalRadius : 50.f;
 
 	EntityQuery.ForEachEntityChunk(Context, [&](FMassExecutionContext& SubContext)
 	{
-		const auto FollowView = SubContext.GetMutableFragmentView<FRogueSplineFollowFragment>();
+		const auto FollowView = SubContext.GetMutableFragmentView<FRogueTrainTrackFollowFragment>();
 		const auto StateView  = SubContext.GetMutableFragmentView<FRogueTrainStateFragment>();
 
 		for (int32 i = 0; i < SubContext.GetNumEntities(); ++i)
@@ -56,8 +55,9 @@ void URogueTrainStationDetectProcessor::Execute(FMassEntityManager& EntityManage
 				continue; // next tick we’ll evaluate distance
 			}
 
-			const float StationTrackAlpha = TrackSharedFragment.StationTrackAlphas[State.TargetStationIdx];
-			const float Arc = RogueTrainUtility::ArcDistanceWrapped(Follow.Alpha, StationTrackAlpha);
+			//const float StationTrackAlpha = TrackSharedFragment.StationTrackAlphas[State.TargetStationIdx];
+			const float DockAlpha = TrackSharedFragment.Platforms[State.TargetStationIdx].DockAlpha;
+			const float Arc = RogueTrainUtility::ArcDistanceWrapped(Follow.Alpha, DockAlpha);
 			const float Dist = Arc * TrackSharedFragment.TrackLength;
 			const float DeltaTime = SubContext.GetDeltaTimeSeconds();
 			

@@ -5,6 +5,8 @@
 #include "MassCommandBuffer.h"
 #include "MassCommands.h"
 #include "MassCommonFragments.h"
+#include "MassMovementFragments.h"
+#include "MassNavigationFragments.h"
 #include "MassRepresentationFragments.h"
 #include "Subsystems/RogueTrainWorldSubsystem.h"
 
@@ -12,8 +14,8 @@
 void RoguePassengerQueueUtility::EnqueueAtWaitingPoint(FRogueStationQueueFragment& StationQueueFragment, const int32 WaitingPointIdx,
 	const FMassEntityHandle Passenger, const FMassEntityHandle DestStation, const float Time, const int32 Priority)
 {
-	TArray<FRoguePassengerQueueEntry>* Entries = StationQueueFragment.QueuesByWP.Find(WaitingPointIdx);
-	if (!Entries) { Entries = &StationQueueFragment.QueuesByWP.Add(WaitingPointIdx); }
+	TArray<FRoguePassengerQueueEntry>* Entries = StationQueueFragment.QueuesByWaitingPoint.Find(WaitingPointIdx);
+	if (!Entries) { Entries = &StationQueueFragment.QueuesByWaitingPoint.Add(WaitingPointIdx); }
 	
 	FRoguePassengerQueueEntry QueueEntry;
 	QueueEntry.Passenger = Passenger;
@@ -27,7 +29,7 @@ void RoguePassengerQueueUtility::EnqueueAtWaitingPoint(FRogueStationQueueFragmen
 
 bool RoguePassengerQueueUtility::DequeueFromWaitingPoint(FRogueStationQueueFragment& StationQueueFragment, const int32 WaitingPointIdx, FRoguePassengerQueueEntry& Out)
 {
-	TArray<FRoguePassengerQueueEntry>* Entries = StationQueueFragment.QueuesByWP.Find(WaitingPointIdx);
+	TArray<FRoguePassengerQueueEntry>* Entries = StationQueueFragment.QueuesByWaitingPoint.Find(WaitingPointIdx);
 	if (!Entries || Entries->Num() == 0) return false;
 
 	int32 BestIdx = INDEX_NONE;
@@ -68,15 +70,12 @@ void RoguePassengerUtility::Disembark(const FMassEntityManager& EntityManager, c
 			PassengerFragment->WaitingPointIdx = INDEX_NONE; 
 			PassengerFragment->Phase = ERoguePassengerPhase::UnloadAtStation;
 		}
-            
-		Context.Defer().PushCommand<FMassCommandRemoveTag<FRoguePassengerOnTrainTag>>(Passenger);
 	}
 	
 	CarriageFragment.Occupants.RemoveAtSwap(Index, 1, EAllowShrinking::No);
 }
 
-bool RoguePassengerUtility::TryBoard(const FMassEntityManager& EntityManager, const FMassExecutionContext& Context, const FMassEntityHandle Passenger, const FMassEntityHandle CarriageEntity,
-	FRogueCarriageFragment& CarriageFragment)
+bool RoguePassengerUtility::TryBoard(const FMassEntityManager& EntityManager, const FMassExecutionContext& Context, const FMassEntityHandle Passenger, const FMassEntityHandle CarriageEntity, FRogueCarriageFragment& CarriageFragment)
 {
 	if (CarriageFragment.Occupants.Num() >= CarriageFragment.Capacity) return false;
 	if (!IsHandleValid(EntityManager, Passenger)) return false;
@@ -88,8 +87,6 @@ bool RoguePassengerUtility::TryBoard(const FMassEntityManager& EntityManager, co
 		PassengerFragment->Phase = ERoguePassengerPhase::ToAssignedCarriage;
 	}
 
-	Context.Defer().PushCommand<FMassCommandRemoveTag<FRoguePassengerWaitingTag>>(Passenger);
-	Context.Defer().PushCommand<FMassCommandAddTag<FRoguePassengerOnTrainTag>>(Passenger);
 	CarriageFragment.Occupants.Add(Passenger);
 	
 	return true;
@@ -97,7 +94,7 @@ bool RoguePassengerUtility::TryBoard(const FMassEntityManager& EntityManager, co
 
 void RoguePassengerUtility::HidePassenger(const FMassEntityManager& EntityManager, const FMassEntityHandle EntityHandle)
 {
-	// Visual off + stash underground (simple, consistent with your pool pattern)
+	// PlatformConfig off + stash underground (simple, consistent with your pool pattern)
 	if (auto* TransformFragment = EntityManager.GetFragmentDataPtr<FTransformFragment>(EntityHandle))
 	{
 		FTransform& Transform = TransformFragment->GetMutableTransform();
@@ -106,6 +103,20 @@ void RoguePassengerUtility::HidePassenger(const FMassEntityManager& EntityManage
 		if (auto* PassengerFragment = EntityManager.GetFragmentDataPtr<FRoguePassengerFragment>(EntityHandle))
 		{
 			PassengerFragment->Target = TransformFragment->GetTransform().GetLocation();
+		}		
+
+		if (auto* MoveTargetFragment = EntityManager.GetFragmentDataPtr<FMassMoveTargetFragment>(EntityHandle))
+		{
+			MoveTargetFragment->Center         = Transform.GetLocation();
+			MoveTargetFragment->DistanceToGoal = 0.f;
+			MoveTargetFragment->DesiredSpeed   = FMassInt16Real(0.f);
+			MoveTargetFragment->Forward        = FVector::ZeroVector;
+			MoveTargetFragment->IntentAtGoal   = EMassMovementAction::Stand;
+		}
+	
+		if (auto* Vel = EntityManager.GetFragmentDataPtr<FMassVelocityFragment>(EntityHandle))
+		{
+			Vel->Value = FVector::ZeroVector;
 		}
 	}
 	
@@ -117,7 +128,7 @@ void RoguePassengerUtility::HidePassenger(const FMassEntityManager& EntityManage
 
 void RoguePassengerUtility::ShowPassenger(const FMassEntityManager& EntityManager, const FMassEntityHandle EntityHandle, const FVector& ShowLocation)
 {
-	// Visual off + stash underground (simple, consistent with your pool pattern)
+	// PlatformConfig off + stash underground (simple, consistent with your pool pattern)
 	if (!ShowLocation.IsNearlyZero())
 	{
 		if (auto* TransformFragment = EntityManager.GetFragmentDataPtr<FTransformFragment>(EntityHandle))
@@ -129,7 +140,7 @@ void RoguePassengerUtility::ShowPassenger(const FMassEntityManager& EntityManage
 	
 	if (auto* LOD = EntityManager.GetFragmentDataPtr<FMassRepresentationLODFragment>(EntityHandle))
 	{
-		LOD->LOD = EMassLOD::High;
+		LOD->LOD = EMassLOD::Low;
 	}
 }
 

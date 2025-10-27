@@ -9,6 +9,7 @@
 #include "Mass/Processors/Stations/RogueTrainStationDetectProcessor.h"
 #include "Subsystems/RogueTrainWorldSubsystem.h"
 #include "Utilities/RoguePassengerUtility.h"
+#include "Utilities/RogueStationQueueUtility.h"
 
 
 URogueTrainStationOpsProcessor::URogueTrainStationOpsProcessor(): EntityQuery(*this)
@@ -38,8 +39,8 @@ void URogueTrainStationOpsProcessor::Execute(FMassEntityManager& EntityManager, 
 
 	const float DepartureTime = Settings->DepartureTimeSeconds;
 	const int32 MaxLoadPerTickPerCar = Settings->MaxLoadPerTickPerCarriage;
-	const int32 MaxUnloadPerTickPerCar = Settings->MaxUnLoadPerTickPerCarriage;
 	const float StationStateSwitchTime = (Settings->MaxDwellTimeSeconds * 0.5f) + (DepartureTime * 0.5f);
+	const float CurrentTime = Context.GetWorld()->GetTimeSeconds();
 
 	EntityQuery.ForEachEntityChunk(Context, [&](FMassExecutionContext& SubContext)
 	{
@@ -92,7 +93,7 @@ void URogueTrainStationOpsProcessor::Execute(FMassEntityManager& EntityManager, 
 
             // Resolve current station entity
             if (!TrackSharedFragment.StationEntities.IsValidIndex(State.TargetStationIdx)) continue;			
-            const FMassEntityHandle CurrentStationEntity = TrackSharedFragment.StationEntities[State.TargetStationIdx];
+            const FMassEntityHandle CurrentStationEntity = TrackSharedFragment.StationEntities[State.TargetStationIdx].Value;
 
 			// Get station queue fragment
             FRogueStationQueueFragment* StationQueueFragment = EntityManager.GetFragmentDataPtr<FRogueStationQueueFragment>(CurrentStationEntity);
@@ -106,36 +107,64 @@ void URogueTrainStationOpsProcessor::Execute(FMassEntityManager& EntityManager, 
             // UNLOAD passengers whose Dest == current station (per carriage)
 			if (State.StationTrainPhase == ERogueStationTrainPhase::Unloading)
 			{
+				int32 EmptyCarriages = 0;
 				for (const FMassEntityHandle CarriageEntity : *CarriageList)
-				{
+				{					
 					auto* CarriageFragment = EntityManager.GetFragmentDataPtr<FRogueCarriageFragment>(CarriageEntity);
-					if (!CarriageFragment || CarriageFragment->Occupants.Num() <= 0) continue;
+					if (!CarriageFragment) continue;
+
+					if (CarriageFragment->Occupants.Num() <= 0)
+					{
+						EmptyCarriages++;
+					}
 
 					auto* CarriageTransformFragment = EntityManager.GetFragmentDataPtr<FTransformFragment>(CarriageEntity);
 					if (!CarriageTransformFragment) continue;
 
 					const FVector CarriageLocation = CarriageTransformFragment->GetTransform().GetLocation();
 
-					int32 Budget = MaxUnloadPerTickPerCar;
-					for (int32 Idx = CarriageFragment->Occupants.Num()-1; Idx >= 0 && Budget > 0; --Idx)
+					if (CurrentTime >= CarriageFragment->NextAllowedUnloadTime)
 					{
-						const FMassEntityHandle P = CarriageFragment->Occupants[Idx];
-						if (!RoguePassengerUtility::IsHandleValid(EntityManager, P)) { CarriageFragment->Occupants.RemoveAtSwap(Idx); continue; }
-
-						const FRoguePassengerFragment* PassengerFragment = EntityManager.GetFragmentDataPtr<FRoguePassengerFragment>(P);
-						if (!PassengerFragment)
+						const int32 NumOccupants = CarriageFragment->Occupants.Num();
+						for (int32 Attempts = 0; Attempts < NumOccupants; ++Attempts)
 						{
-							CarriageFragment->Occupants.RemoveAtSwap(Idx); continue;
-						}
+							const int32 Idx = CarriageFragment->UnloadCursor % CarriageFragment->Occupants.Num();
+							const FMassEntityHandle Passenger = CarriageFragment->Occupants[Idx];
 
-						// unload only if this is their destination
-						if (PassengerFragment->DestinationStation == CurrentStationEntity)
-						{
-							RoguePassengerUtility::Disembark(EntityManager, SubContext, *CarriageFragment, Idx, CarriageLocation);
-							--Budget;
+							if (!RoguePassengerUtility::IsHandleValid(EntityManager, Passenger))
+							{
+								CarriageFragment->Occupants.RemoveAtSwap(Idx);
+								continue;
+							}
+
+							const FRoguePassengerFragment* PassengerFragment = EntityManager.GetFragmentDataPtr<FRoguePassengerFragment>(Passenger);
+							if (!PassengerFragment)
+							{
+								CarriageFragment->Occupants.RemoveAtSwap(Idx);
+								continue;
+							}
+
+							// Only disembark if this is the destination station
+							if (PassengerFragment->DestinationStation == CurrentStationEntity)
+							{
+								RoguePassengerUtility::Disembark(EntityManager, SubContext, *CarriageFragment, Idx, CarriageLocation);
+								CarriageFragment->NextAllowedUnloadTime = CurrentTime + Settings->UnloadIntervalSeconds;
+								
+								// Keeping UnloadCursor at same Idx; the next passenger shifts into this slot
+								break;
+							}
+
+							// Advance cursor if this passenger is not for this station
+							++CarriageFragment->UnloadCursor;
 						}
-					}				
-				}				
+					}					
+				}
+
+				if (EmptyCarriages >= CarriageList->Num())
+				{
+					// All carriages empty, skip to loading phase
+					State.StationTrainPhase = ERogueStationTrainPhase::Loading;
+				}
 			}
 
             // LOAD passengers whose dest != current station (per carriage)
@@ -155,8 +184,8 @@ void URogueTrainStationOpsProcessor::Execute(FMassEntityManager& EntityManager, 
 
 					// Build a list of WP indices from the TMap
 					TArray<int32> WaitingPointIndices;
-					WaitingPointIndices.Reserve(StationQueueFragment->QueuesByWP.Num());
-					for (const auto& Pair : StationQueueFragment->QueuesByWP)
+					WaitingPointIndices.Reserve(StationQueueFragment->Grids.Num());
+					for (const auto& Pair : StationQueueFragment->Grids)
 					{
 						WaitingPointIndices.Add(Pair.Key);
 					}
@@ -174,18 +203,41 @@ void URogueTrainStationOpsProcessor::Execute(FMassEntityManager& EntityManager, 
 					for (int32 j = 0; j < WaitingPointIndices.Num() && BoardingBudget > 0; ++j)
 					{
 						const int32 WaitingPointIdx = WaitingPointIndices[j];
-
-						FRoguePassengerQueueEntry Entry;
-						while (BoardingBudget > 0 && RoguePassengerQueueUtility::DequeueFromWaitingPoint(*StationQueueFragment, WaitingPointIdx, Entry))
+		
+						while (BoardingBudget > 0)
 						{
-							// Skip arrivals for this station (they should exit)
-							if (Entry.DestStation == CurrentStationEntity) continue;
+							FMassEntityHandle Passenger;
+							int32 SlotIdx = INDEX_NONE;
+							FVector SlotPos;
 
-							// Try to board
-							if (RoguePassengerUtility::TryBoard(EntityManager, SubContext, Entry.Passenger, CarriageEntity, *CarriageFragment))
+							// Peek at next passenger in queue, if none move to next waiting point
+							if (!RogueStationQueueUtility::PeekFromGrid(EntityManager, *StationQueueFragment, WaitingPointIdx, Passenger, CurrentStationEntity, SlotIdx, SlotPos))
+								break;
+							
+							// Try to board passenger, if successful remove from queue, if unsuccessful break to next waiting point as carriage is likely full
+							if (RoguePassengerUtility::TryBoard(EntityManager, SubContext, Passenger, CarriageEntity, *CarriageFragment))
 							{
+								// Successfully boarded — release the slot
+								if (const FRoguePassengerFragment* PassengerFragment = EntityManager.GetFragmentDataPtr<FRoguePassengerFragment>(Passenger))
+								{
+									RogueStationQueueUtility::ReleaseSlot(*StationQueueFragment, *PassengerFragment);
+								}
+					
+								// Clear passenger’s waiting data
+								if (FRoguePassengerFragment* PassengerFragmentMutable = EntityManager.GetFragmentDataPtr<FRoguePassengerFragment>(Passenger))
+								{
+									PassengerFragmentMutable->WaitingPointIdx = INDEX_NONE;
+									PassengerFragmentMutable->WaitingSlotIdx = INDEX_NONE;
+									PassengerFragmentMutable->bWaiting = false;
+								}
 								--BoardingBudget;
 							}
+							else
+							{
+								// Carriage full or other issue, break to next waiting point
+								break;
+							}
+							
 						}
 					}
 				}

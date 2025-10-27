@@ -10,6 +10,11 @@
 			"Name": "RogueMassExample",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "RogueAIDebugger",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [
@@ -34,6 +39,10 @@
 		},
 		{
 			"Name": "MassCrowd",
+			"Enabled": true
+		},
+		{
+			"Name": "EnhancedInput",
 			"Enabled": true
 		}
 	]

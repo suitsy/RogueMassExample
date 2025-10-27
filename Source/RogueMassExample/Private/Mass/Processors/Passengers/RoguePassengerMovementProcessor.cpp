@@ -7,6 +7,7 @@
 #include "MassExecutionContext.h"
 #include "Subsystems/RogueTrainWorldSubsystem.h"
 #include "Utilities/RoguePassengerUtility.h"
+#include "Utilities/RogueStationQueueUtility.h"
 
 URoguePassengerMovementProcessor::URoguePassengerMovementProcessor(): EntityQuery(*this)
 {
@@ -21,6 +22,7 @@ void URoguePassengerMovementProcessor::ConfigureQueries(const TSharedRef<FMassEn
 	EntityQuery.AddRequirement<FMassMoveTargetFragment>(EMassFragmentAccess::ReadWrite);	
 	EntityQuery.AddConstSharedRequirement<FMassMovementParameters>(EMassFragmentPresence::All);
 	EntityQuery.AddRequirement<FRoguePassengerFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);	
+	EntityQuery.AddTagRequirement<FRogueTrainPassengerTag>(EMassFragmentPresence::All);
 	EntityQuery.RegisterWithProcessor(*this);	
 }
 
@@ -48,18 +50,26 @@ void URoguePassengerMovementProcessor::Execute(FMassEntityManager& EntityManager
 			FMassMoveTargetFragment& MoveTarget = NavTargetList[EntityIndex];
 			const FMassEntityHandle PassengerHandle = SubContext.GetEntity(EntityIndex);
 			FRoguePassengerFragment& PassengerFragment = PassengerFragments[EntityIndex];
+			const FMassEntityHandle Entity = SubContext.GetEntity(EntityIndex);
 
 			// Check we have a valid station and no target has been assigned yet
 			if (PassengerFragment.OriginStation.IsValid() && PassengerFragment.WaitingPointIdx == INDEX_NONE)
 			{				
 				// Assign a waiting point 
-				AssignWaitingPoint(EntityManager, PassengerFragment);	
+				AssignWaitingPoint(EntityManager, PassengerFragment, Entity);
+
+				if (PassengerFragment.WaitingSlotIdx == INDEX_NONE)
+				{
+					MoveTarget.IntentAtGoal = EMassMovementAction::Stand;
+					MoveTarget.DesiredSpeed = FMassInt16Real(0.f);
+					continue; // No slot free, stay at spawn
+				}
 			}
 
-			// If we have a move target, update movement towards it
-			if (!PassengerFragment.Target.IsNearlyZero())
+			// If we have a move target, update movement towards it			
+			if (PassengerFragment.Phase != ERoguePassengerPhase::RideOnTrain && !PassengerFragment.bWaiting)
 			{
-				MoveToTarget(MoveTarget, MoveParams, PTransform, PassengerFragment.Target);
+				MoveToTarget(PassengerFragment, MoveTarget, MoveParams, PTransform, PassengerFragment.Target);
 			}			
 
 			// Handle phase-specific logic, destination arrival, boarding, departing and waiting
@@ -70,7 +80,7 @@ void URoguePassengerMovementProcessor::Execute(FMassEntityManager& EntityManager
 				case ERoguePassengerPhase::RideOnTrain: break; // Riding, do nothing
 				case ERoguePassengerPhase::UnloadAtStation: UnloadAtStation(EntityManager, PassengerFragment, PTransform); break;
 				case ERoguePassengerPhase::ToPostUnloadWaitingPoint: ToPostUnloadWaitingPoint(EntityManager, PassengerFragment, PTransform); break;
-				case ERoguePassengerPhase::ToExitSpawn: ToExitSpawn(TrainSubsystem, SubContext, PassengerFragment, PTransform, PassengerHandle); break;
+				case ERoguePassengerPhase::ToExitSpawn: ToExitSpawn(EntityManager, TrainSubsystem, SubContext, PassengerFragment, PTransform, PassengerHandle); break;
 				default:
 					break;
 			}
@@ -78,33 +88,45 @@ void URoguePassengerMovementProcessor::Execute(FMassEntityManager& EntityManager
 	});
 }
 
-void URoguePassengerMovementProcessor::AssignWaitingPoint(const FMassEntityManager& EntityManager, FRoguePassengerFragment& PassengerFragment)
+void URoguePassengerMovementProcessor::AssignWaitingPoint(const FMassEntityManager& EntityManager, FRoguePassengerFragment& PassengerFragment, const FMassEntityHandle& Entity)
 {
-	if (const auto* StationQueueFragment = EntityManager.GetFragmentDataPtr<FRogueStationQueueFragment>(PassengerFragment.OriginStation))
+	if (auto* StationQueueFragment = EntityManager.GetFragmentDataPtr<FRogueStationQueueFragment>(PassengerFragment.OriginStation))
 	{
 		// Choose a random waiting point at that station
 		PassengerFragment.WaitingPointIdx = (StationQueueFragment->WaitingPoints.Num() > 0)
 			? FMath::RandRange(0, StationQueueFragment->WaitingPoints.Num() - 1)
 			: INDEX_NONE;
 		if (PassengerFragment.WaitingPointIdx == INDEX_NONE) return;
-		
-		// Assign target waiting point
-		if (StationQueueFragment->WaitingPoints.IsValidIndex(PassengerFragment.WaitingPointIdx))
-		{
-			PassengerFragment.Target = StationQueueFragment->WaitingPoints[PassengerFragment.WaitingPointIdx];
-		}
+
+		// Assign a waiting slot at that waiting point
+		FVector SlotPosition;
+		const int32 SlotIdx = RogueStationQueueUtility::ClaimWaitingSlot(StationQueueFragment, PassengerFragment.WaitingPointIdx, Entity, SlotPosition);
+		PassengerFragment.WaitingSlotIdx = SlotIdx;
+		if (SlotIdx == INDEX_NONE) return;
+
+		// Assign move target to waiting point
+		PassengerFragment.Target = SlotPosition;
 	}
 }
 
-void URoguePassengerMovementProcessor::MoveToTarget(FMassMoveTargetFragment& MoveTarget, const FMassMovementParameters& MoveParams, const FTransform& PTransform, const FVector& TargetDestination)
+void URoguePassengerMovementProcessor::MoveToTarget(const FRoguePassengerFragment& PassengerFragment, FMassMoveTargetFragment& MoveTarget, const FMassMovementParameters& MoveParams,
+	const FTransform& PTransform, const FVector& TargetDestination)
 {
-	MoveTarget.Center = TargetDestination;
-	FVector TargetVector = TargetDestination - PTransform.GetLocation();
-	TargetVector.Z = 0.0f; // Ignore Z for horizontal movement
-	MoveTarget.DistanceToGoal = TargetVector.Size();
-	MoveTarget.Forward = TargetVector.GetSafeNormal();
-	const bool bHasArrived = MoveTarget.DistanceToGoal <= 20.f;
-	MoveTarget.DesiredSpeed = bHasArrived ? FMassInt16Real(0.f) : FMassInt16Real(MoveParams.DefaultDesiredSpeed);
+	FVector Delta  = PassengerFragment.Target - PTransform.GetLocation();
+	Delta.Z = 0.f;
+	const float DistToGoal = Delta.Size();
+	
+	if (DistToGoal > PassengerFragment.AcceptanceRadius)
+	{
+		MoveTarget.Center = TargetDestination;
+		MoveTarget.DistanceToGoal = DistToGoal;
+		MoveTarget.Forward = Delta.GetSafeNormal();
+		
+		constexpr float SlowdownRadius = 120.f; 
+		const float t = FMath::Clamp(DistToGoal / SlowdownRadius, 0.f, 1.f);
+		const float TargetSpeed = t * MoveParams.DefaultDesiredSpeed; 
+		MoveTarget.DesiredSpeed = FMassInt16Real(TargetSpeed);
+	}
 }
 
 void URoguePassengerMovementProcessor::ToStationWaitingPoint(const FMassEntityManager& EntityManager, FRoguePassengerFragment& PassengerFragment,
@@ -127,9 +149,6 @@ void URoguePassengerMovementProcessor::ToStationWaitingPoint(const FMassEntityMa
 void URoguePassengerMovementProcessor::ToAssignedCarriage(const FMassEntityManager& EntityManager, const FMassExecutionContext& Context, FRoguePassengerFragment& PassengerFragment,
 	 const FTransform& PTransform, const FMassEntityHandle PassengerHandle)
 {
-	// Reset waiting flag
-	PassengerFragment.bWaiting = false;
-	
 	// If we were boarded already, VehicleHandle is set, head to the carriage door (carriage transform)
 	if (PassengerFragment.VehicleHandle.IsSet() && EntityManager.IsEntityValid(PassengerFragment.VehicleHandle))
 	{
@@ -140,9 +159,9 @@ void URoguePassengerMovementProcessor::ToAssignedCarriage(const FMassEntityManag
 			if (FVector::DistSquared(PTransform.GetLocation(), PassengerFragment.Target) <= FMath::Square(PassengerFragment.AcceptanceRadius))
 			{				
 				RoguePassengerUtility::HidePassenger(EntityManager, PassengerHandle);
-				Context.Defer().PushCommand<FMassCommandAddTag<FRoguePassengerOnTrainTag>>(PassengerHandle);
 				PassengerFragment.Phase = ERoguePassengerPhase::RideOnTrain;
-				PassengerFragment.Target = PTransform.GetLocation();
+				PassengerFragment.WaitingPointIdx = INDEX_NONE;
+				PassengerFragment.WaitingSlotIdx = INDEX_NONE;
 			}
 		}
 	}
@@ -166,7 +185,7 @@ void URoguePassengerMovementProcessor::UnloadAtStation(const FMassEntityManager&
 
 void URoguePassengerMovementProcessor::ToPostUnloadWaitingPoint(const FMassEntityManager& EntityManager, FRoguePassengerFragment& PassengerFragment, const FTransform& PTransform)
 {
-	if (FVector::DistSquared(PTransform.GetLocation(), PassengerFragment.Target) <= FMath::Square(PassengerFragment.AcceptanceRadius))
+	if (FVector::DistSquared(PTransform.GetLocation(), PassengerFragment.Target) <= FMath::Square(PassengerFragment.AcceptanceRadius * 2.f))
 	{
 		// Immediately head to nearest exit spawn to leave the world
 		if (const auto* StationQueueFragment = EntityManager.GetFragmentDataPtr<FRogueStationQueueFragment>(PassengerFragment.DestinationStation))
@@ -182,14 +201,21 @@ void URoguePassengerMovementProcessor::ToPostUnloadWaitingPoint(const FMassEntit
 	}
 }
 
-void URoguePassengerMovementProcessor::ToExitSpawn(URogueTrainWorldSubsystem* TrainSubsystem, const FMassExecutionContext& Context, FRoguePassengerFragment& PassengerFragment,
+void URoguePassengerMovementProcessor::ToExitSpawn(const FMassEntityManager& EntityManager, URogueTrainWorldSubsystem* TrainSubsystem, const FMassExecutionContext& Context, FRoguePassengerFragment& PassengerFragment,
 	 const FTransform& PTransform, const FMassEntityHandle PassengerHandle)
 {
 	if (FVector::DistSquared(PTransform.GetLocation(), PassengerFragment.Target) <= FMath::Square(PassengerFragment.AcceptanceRadius))
 	{
+		if (auto* StationQueueFragment = EntityManager.GetFragmentDataPtr<FRogueStationQueueFragment>(PassengerFragment.OriginStation))
+		{
+			if (PassengerFragment.bWaiting && PassengerFragment.WaitingPointIdx != INDEX_NONE && PassengerFragment.WaitingSlotIdx != INDEX_NONE)
+			{
+				RogueStationQueueUtility::ReleaseSlot(*StationQueueFragment, PassengerFragment);
+			}
+		}
+		
 		// Return to pool / mark for destruction
 		PassengerFragment.Phase = ERoguePassengerPhase::Pool;
 		TrainSubsystem->EnqueueEntityToPool(PassengerHandle, Context, ERogueEntityType::Passenger);
-		PassengerFragment.Target = PTransform.GetLocation();
 	}
 }
