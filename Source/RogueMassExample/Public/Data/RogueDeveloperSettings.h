@@ -30,6 +30,10 @@ public:
 	/** Interval between spawning new passengers */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Simulation Settings", meta=(ClampMin="0"))
 	float SpawnIntervalSeconds = 0.25f;
+
+	/** Interval between spawning new passengers */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Simulation Settings", meta=(ClampMin="0"))
+	float TrackSplineResampleStep = 500.f;
 	
 	/** Maximum number of entities to spawn per frame to avoid hitches */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Spawning", meta=(ClampMin="1"))
@@ -40,6 +44,22 @@ public:
 	/** Number of trains to simulate */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Trains", meta=(ClampMin="1"))
 	int32 NumTrains = 2;
+	
+	/** Lead engine visual length */
+	UPROPERTY(EditAnywhere, Config, Category="Trains")
+	float EngineLength = 200.f;
+	
+	/** Height of train from ground */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Trains", meta=(ClampMin="1"))
+	float EngineRideHeight = 10.f;
+
+	/** MaxSpeed of the lead carriage when cruising (not approaching a station) */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Trains")
+	float LeadCruiseSpeed = 1200.f; // cm/s
+
+	/** MaxSpeed of the lead carriage when approaching a station */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Trains")
+	float StationApproachSpeed = 500.f;
 
 	/** Number of carriages per train */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Carriages", meta=(ClampMin="0"))
@@ -48,11 +68,19 @@ public:
 	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Carriages")
 	float MinHeadway = 1500.f; 
 
-	/** Spacing between carriages in meters */
+	/** Length of the carriage model */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Carriages", meta=(ClampMin="1.0"))
-	float CarriageSpacingMeters = 8.f; 
+	float CarriageLength = 200.f;
 
-	/** Spacing between carriages in meters */
+	/** Carriage ride height from rail to mesh pivot */
+	UPROPERTY(EditAnywhere, Config, Category="Trains|Carriage")
+	float CarriageRideHeight = 10.f;
+
+	/** Spacing between carriages */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Carriages", meta=(ClampMin="1.0"))
+	float CarriageSpacing = 8.f; 
+
+	/** Maximum passenger loading into carriage per tick */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Carriages", meta=(ClampMin="1.0"))
 	float MaxLoadPerTickPerCarriage = 4.f; 
 
@@ -66,15 +94,19 @@ public:
 
 	/** Maximum number of passengers per carriage */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Passengers", meta=(ClampMin="0"))
-	int32 MaxPassengersPerCarriage = 20;
+	int32 MaxPassengersPerCarriage = 100;
 
-	/** MaxSpeed of the lead carriage when cruising (not approaching a station) */
-	UPROPERTY(EditDefaultsOnly, Config, Category="Trains")
-	float LeadCruiseSpeed = 1200.f; // cm/s
+	/** Passengers destination acceptance radius */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Passengers", meta=(ClampMin="0"))
+	float PassengerAcceptanceRadius = 20.f;	
 
-	/** MaxSpeed of the lead carriage when approaching a station */
-	UPROPERTY(EditDefaultsOnly, Config, Category="Trains")
-	float StationApproachSpeed = 500.f;
+	/** Passengers collision radius */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Passengers", meta=(ClampMin="0"))
+	float PassengerRadius = 10.f;	
+
+	/** Interval between spawning new passengers */
+	UPROPERTY(EditDefaultsOnly, Config, Category="Trains|Passengers", meta=(ClampMin="0"))
+	float PassengerMaxSpeed = 200.f;
 
 	/** Acceleration and deceleration rate of the lead carriage */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Stations", meta=(ClampMin="0"))
@@ -82,19 +114,7 @@ public:
 
 	/** Time buffer from allowing boarding to leaving the station */
 	UPROPERTY(EditDefaultsOnly, Config, Category="Stations", meta=(ClampMin="0"))
-	float DepartureTimeSeconds = 2.f;	
-
-	/** Passengers destination acceptance radius */
-	UPROPERTY(EditDefaultsOnly, Config, Category="Passengers", meta=(ClampMin="0"))
-	float PassengerAcceptanceRadius = 20.f;	
-
-	/** Passengers collision radius */
-	UPROPERTY(EditDefaultsOnly, Config, Category="Passengers", meta=(ClampMin="0"))
-	float PassengerRadius = 10.f;	
-
-	/** Interval between spawning new passengers */
-	UPROPERTY(EditDefaultsOnly, Config, Category="Passengers", meta=(ClampMin="0"))
-	float PassengerMaxSpeed = 200.f;
+	float DepartureTimeSeconds = 2.f; 	
 
 	// Station list
 	UPROPERTY(EditAnywhere, Config, Category="Stations")

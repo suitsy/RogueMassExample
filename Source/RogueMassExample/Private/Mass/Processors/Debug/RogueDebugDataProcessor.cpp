@@ -188,7 +188,7 @@ void URogueDebugDataProcessor::Execute(FMassEntityManager& EntityManager, FMassE
 			DebugData.Speed = FollowFragment.Speed;
 			DebugData.WorldPos = CTransform.GetLocation();
 			DebugData.IndexInTrain = LinkFragment.CarriageIndex;
-			DebugData.Spacing = LinkFragment.SpacingMeters;
+			DebugData.Spacing = LinkFragment.Spacing;
 			DebugData.Capacity = CarriageFragment.Capacity;
 			DebugData.Occupants = CarriageFragment.Occupants.Num();
 

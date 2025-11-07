@@ -3,6 +3,7 @@
 
 #include "Utilities/RogueTrainUtility.h"
 #include "Components/SplineComponent.h"
+#include "Data/RogueDeveloperSettings.h"
 
 using namespace RogueTrainUtility;
 
@@ -158,5 +159,46 @@ void RogueTrainUtility::BuildPlatformSegment(const USplineComponent& Spline, con
 	}
 
 	Out.WaitingGridConfig = StationConfigData.WaitingGridConfig;
+}
+
+void RogueTrainUtility::ComputeConsistPlacement(const FRogueTrackSharedFragment& Track, const float EngineHeadAlpha, const int32 NumCarriages, TArray<FRoguePlacedCar>& Out)
+{
+	const auto* Settings = GetDefault<URogueDeveloperSettings>();
+	if (!Settings) return;
+	
+	Out.Reset();
+	if (!Track.IsValid()) return;
+
+	auto WrappedAlpha = [&](const float Dist){ return RogueTrainUtility::WrapTrackAlpha(Dist / Track.TrackLength); };
+
+	// Convert to spline distance
+	const float CarDist = EngineHeadAlpha * Track.TrackLength;
+
+	auto SampleAtDist = [&](const float Dist, const float RideHeight)->FRoguePlacedCar
+	{
+		RogueTrainUtility::FSplineStationSample Sample;
+		const float Alpha = WrappedAlpha(Dist);
+		if (!RogueTrainUtility::GetStationSplineSample(Track, Alpha, Sample))
+			return { Alpha, FTransform::Identity };
+
+		const FVector Up = Sample.Up.IsNearlyZero() ? FVector::UpVector : Sample.Up;
+		const FTransform Transform(FQuat::Identity, Sample.Location + Up * RideHeight, FVector::OneVector);
+		return { Alpha, Transform };
+	};
+
+	// Engine center = head minus half engine length
+	const float EngineCenterDist = CarDist - 0.5f * Settings->EngineLength;
+	Out.Add(SampleAtDist(EngineCenterDist, Settings->EngineRideHeight));
+
+	// Walk backwards for carriages 
+	float Cursor = EngineCenterDist - 0.5f * Settings->EngineLength - Settings->CarriageSpacing;
+	for (int32 i = 0; i < NumCarriages; ++i)
+	{
+		const float CarCenterDist = Cursor - 0.5f * Settings->CarriageLength;
+		Out.Add(SampleAtDist(CarCenterDist, Settings->CarriageRideHeight));
+
+		// move next car to rear face and subtract gap
+		Cursor = CarCenterDist - 0.5f * Settings->CarriageLength - Settings->CarriageSpacing;
+	}
 }
 

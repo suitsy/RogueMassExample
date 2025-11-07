@@ -37,7 +37,7 @@ void URogueTrainHeadwayProcessor::Execute(FMassEntityManager& EntityManager, FMa
 	const float TrackLength = TrackSharedFragment.TrackLength;
 	const float MinGap = Settings ? Settings->MinHeadway : 1500.f;
 	const float FullGap = MinGap * 2.f;
-	const float Spacing = (Settings ? Settings->CarriageSpacingMeters : 8.f) * 100.f;	
+	const float Spacing = (Settings ? Settings->CarriageSpacing : 8.f);	
 
 	if(TrackLength <= 0.f) return;
 

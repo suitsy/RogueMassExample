@@ -246,7 +246,7 @@ struct ROGUEMASSEXAMPLE_API FRogueTrainLinkFragment : public FMassFragment
 	
 	FMassEntityHandle LeadHandle;
 	int32 CarriageIndex = 0; // 0 reserved for lead
-	float SpacingMeters = 8.f;
+	float Spacing = 8.f;
 };
 
 USTRUCT()
@@ -331,4 +331,11 @@ struct ROGUEMASSEXAMPLE_API FRogueDemoLimitsSharedFragment : public FMassSharedF
 	int32 MaxPassengersOverall = 500;
 	float MaxDwellTimeSeconds = 12.f;
 	int32 MaxPerCarriage = 20;
+};
+
+
+struct FRoguePlacedCar
+{
+	float Alpha;
+	FTransform Transform;
 };

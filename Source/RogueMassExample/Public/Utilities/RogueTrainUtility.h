@@ -50,4 +50,5 @@ namespace RogueTrainUtility
 	FTransform SampleTrackFrame(const USplineComponent& Spline, float Alpha);
 	FVector SampleDockPoint(const USplineComponent& Spline, float Alpha);
 	void BuildPlatformSegment(const USplineComponent& Spline, const FRogueStationConfig& StationConfigData, FRoguePlatformData& Out);
+	void ComputeConsistPlacement(const FRogueTrackSharedFragment& Track, const float EngineHeadAlpha, const int32 NumCarriages, TArray<FRoguePlacedCar>& Out);
 }

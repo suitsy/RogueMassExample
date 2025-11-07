@@ -37,8 +37,7 @@ void URogueTrainCarriageFollowProcessor::Execute(FMassEntityManager& EntityManag
 	if (!TrackSharedFragment.IsValid()) return;
 
 	const auto* Settings = GetDefault<URogueDeveloperSettings>();
-	const float SpacingM   = Settings ? Settings->CarriageSpacingMeters : 8.f;
-	const float SpacingCm  = SpacingM * 100.f;
+	const float RideHeight = Settings ? Settings->CarriageRideHeight : 0.f;
 
 	EntityQuery.ForEachEntityChunk(Context, [&](FMassExecutionContext& SubContext)
 	{
@@ -53,12 +52,15 @@ void URogueTrainCarriageFollowProcessor::Execute(FMassEntityManager& EntityManag
 				continue;
 	
 			const FRogueTrainTrackFollowFragment* LeadFollow = EntityManager.GetFragmentDataPtr<FRogueTrainTrackFollowFragment>(Link.LeadHandle);
-			if (!LeadFollow) continue;			
+			if (!LeadFollow) continue;
+			
+			// Center-to-center spacing in **cm** (prefer per-car value; else fall back to settings)
+			const float Spacing = (Link.Spacing > 0.f) ? Link.Spacing : (Settings ? Settings->CarriageLength + Settings->CarriageSpacing : 0.f);
 
 			RogueTrainUtility::FSplineStationSample SplineSample;
-			const float OffsetDistCm = FMath::Max(1, Link.CarriageIndex) * SpacingCm;
-			if (!RogueTrainUtility::GetStationSplineSample(TrackSharedFragment, LeadFollow->Alpha, -OffsetDistCm, 0.f, 0.f, SplineSample))
-				continue;
+			const float OffsetDist = FMath::Max(1, Link.CarriageIndex) * Spacing;
+			if (!RogueTrainUtility::GetStationSplineSample(TrackSharedFragment, LeadFollow->Alpha, -OffsetDist, 0.f, RideHeight, SplineSample))
+				continue;			
 
 			// Update carriage follow state
 			auto& Follow = FollowView[i];

@@ -36,7 +36,7 @@ void URogueTrainEngineMovementProcessor::Execute(FMassEntityManager& EntityManag
 
 	const auto* Settings = GetDefault<URogueDeveloperSettings>();
 	if (!Settings) return;
-
+	const float RideHeight = Settings ? Settings->CarriageRideHeight : 0.f;
 
 	EntityQuery.ForEachEntityChunk(Context, [&](FMassExecutionContext& SubContext)
 	{
@@ -55,16 +55,29 @@ void URogueTrainEngineMovementProcessor::Execute(FMassEntityManager& EntityManag
 			TrackFollowFragment.Speed = TargetSpeed;
 			TrackFollowFragment.Alpha = RogueTrainUtility::WrapTrackAlpha(TrackFollowFragment.Alpha + (TrackFollowFragment.Speed * SubContext.GetDeltaTimeSeconds()) / TrackSharedFragment.TrackLength );
 
-			RogueTrainUtility::SampleSpline(TrackSharedFragment, TrackFollowFragment.Alpha, TrackFollowFragment.WorldPos, TrackFollowFragment.WorldFwd);
+			//RogueTrainUtility::SampleSpline(TrackSharedFragment, TrackFollowFragment.Alpha, TrackFollowFragment.WorldPos, TrackFollowFragment.WorldFwd);
+
+			RogueTrainUtility::FSplineStationSample SplineSample;
+			if (!RogueTrainUtility::GetStationSplineSample(TrackSharedFragment, TrackFollowFragment.Alpha, 0, 0.f, RideHeight, SplineSample))
+				continue;
+
+			TrackFollowFragment.Alpha = SplineSample.Alpha;
+			TrackFollowFragment.WorldPos = SplineSample.Location;
+			TrackFollowFragment.WorldFwd = SplineSample.Forward;
+			
+			FTransform& TrainTransform = TransformView[i].GetMutableTransform();
+			TrainTransform = SplineSample.World;
+			const FQuat Rot = FRotationMatrix::MakeFromXZ(SplineSample.Forward, FVector::UpVector).ToQuat();
+			TrainTransform.SetRotation(Rot);
 			
 			// Build an orientation (forward = tangent, up = world up or spline up if you have it)
-			const FVector Fwd = TrackFollowFragment.WorldFwd.GetSafeNormal();
+			/*const FVector Fwd = TrackFollowFragment.WorldFwd.GetSafeNormal();
 			const FQuat Rot = FRotationMatrix::MakeFromXZ(Fwd, FVector::UpVector).ToQuat();
 
 			// Write to the transform fragment
 			FTransform& TrainTransform = TransformView[i].GetMutableTransform();
 			TrainTransform.SetLocation(TrackFollowFragment.WorldPos);
-			TrainTransform.SetRotation(Rot);
+			TrainTransform.SetRotation(Rot);*/
 		}
 	});
 }

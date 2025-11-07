@@ -13,6 +13,7 @@
 
 #include "RogueTrainWorldSubsystem.generated.h"
 
+class ARogueTrainTrack;
 class UMassEntityConfigAsset;
 class USplineComponent;
 
@@ -57,7 +58,7 @@ struct ROGUEMASSEXAMPLE_API FRogueSpawnRequest
 	// Carriage
 	FMassEntityHandle LeadHandle; 
 	int32 CarriageIndex = 1;      
-	float SpacingMeters = 8.f;                  
+	float Spacing = 8.f;                  
 	int32 CarriageCapacity = 20;                 
 
 	// Passenger
@@ -112,7 +113,12 @@ protected:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	void ProcessPendingSpawns();
 
+	// Rebuilds S so its control points are spaced ~StepCm apart along arc length.
+	// Keeps closed/open flag, uses local space to avoid parent transform issues.
+	static void ResampleSplineUniform(USplineComponent& Spline, float Step);
+
 private:
+	TArray<ARogueTrainTrack*> TrackActors;
 	TWeakObjectPtr<USplineComponent> TrackSpline;
 	TArray<FRogueStationData> StationActorData;
 	TMap<int32, FMassEntityHandle> StationEntities;
@@ -141,7 +147,7 @@ private:
 	void DiscoverSplineFromSettings();
 	void GatherStationActors();
 	void CreateStations();
-	void ConfigureTrackToStation(const FRogueSpawnRequest& Request) const;
+	void ConfigureTrackToStation(const FRogueSpawnRequest& Request, const float ResampleDistance) const;
 	static void GetStationSide(const FRoguePlatformData& PlatformData, const FTransform& StationTransform, float& Out);
 	void BuildStationPlatformData();
 	void CreateTrains();
@@ -150,9 +156,14 @@ private:
 	FMassEntityManager* EntityManager = nullptr;
 
 	// Helpers
-	void ConfigureSpawnedEntity(const FRogueSpawnRequest& Request, const FMassEntityHandle Entity);
 	void RegisterEntity(const ERogueEntityType Type, const FMassEntityHandle Entity);
 	void UnregisterEntity(const ERogueEntityType Type, const FMassEntityHandle Entity);
+	
+	void ConfigureSpawnedEntity(const FRogueSpawnRequest& Request, const FMassEntityHandle Entity);
+	void ConfigureStation(const FRogueSpawnRequest& Request, const FMassEntityHandle Entity);
+	void ConfigureTrain(const FRogueSpawnRequest& Request, const FMassEntityHandle Entity);
+	void ConfigureCarriage(const FRogueSpawnRequest& Request, const FMassEntityHandle Entity);
+	void ConfigurePassenger(const FRogueSpawnRequest& Request, const FMassEntityHandle Entity);
 	
 	TArray<FMassEntityHandle>& GetEntitiesFromPoolByType(const ERogueEntityType Type) {	return EntityPool.FindOrAdd(Type); }
 	TArray<FMassEntityHandle>& GetEntitiesFromWorldByType(const ERogueEntityType Type) { return WorldEntities.FindOrAdd(Type); }
