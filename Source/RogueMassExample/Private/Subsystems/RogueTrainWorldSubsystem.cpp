@@ -454,7 +454,7 @@ void URogueTrainWorldSubsystem::CreateTrains()
 		if (Placement.Num() == 0) continue;
 
 		RogueTrainUtility::FSplineStationSample Sample;
-		if (!RogueTrainUtility::GetStationSplineSample(TrackSharedFragment, TrainAlpha, Sample))
+		if (!RogueTrainUtility::GetSplineSample(TrackSharedFragment, TrainAlpha, Sample))
 		{
 			/*Along*/ //0.f,        // e.g. +100.f to place a bit ahead
 			/*Lateral*/ //0.f,      // e.g. +150.f to offset to platform side
@@ -769,7 +769,8 @@ void URogueTrainWorldSubsystem::ConfigureStation(const FRogueSpawnRequest& Reque
 	if (auto* StationFragment = EntityManager->GetFragmentDataPtr<FRogueStationFragment>(Entity))
 	{
 		StationFragment->StationIndex = Request.StationIdx;
-		StationFragment->WorldPosition = Request.PlatformData.Center;				
+		StationFragment->WorldPosition = Request.PlatformData.Center;
+		StationFragment->DockedTrain = FMassEntityHandle();
 	}
 				
 	if (auto* QueueFragment = EntityManager->GetFragmentDataPtr<FRogueStationQueueFragment>(Entity))

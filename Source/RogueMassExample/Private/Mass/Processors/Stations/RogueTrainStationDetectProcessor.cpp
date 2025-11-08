@@ -55,11 +55,20 @@ void URogueTrainStationDetectProcessor::Execute(FMassEntityManager& EntityManage
 				continue; // next tick we’ll evaluate distance
 			}
 
-			//const float StationTrackAlpha = TrackSharedFragment.StationTrackAlphas[State.TargetStationIdx];
 			const float DockAlpha = TrackSharedFragment.Platforms[State.TargetStationIdx].DockAlpha;
-			const float Arc = RogueTrainUtility::ArcDistanceWrapped(TrackFollowFragment.Alpha, DockAlpha);
-			const float Dist = Arc * TrackSharedFragment.TrackLength;
+			const float PrevDistAlpha = RogueTrainUtility::ArcDistanceWrapped(State.PrevAlpha, DockAlpha);
+			const float DistAlpha = RogueTrainUtility::ArcDistanceWrapped(TrackFollowFragment.Alpha, DockAlpha);
+			const float Dist = DistAlpha * TrackSharedFragment.TrackLength;
 			const float DeltaTime = SubContext.GetDeltaTimeSeconds();
+
+			if (DistAlpha > PrevDistAlpha && !State.bAtStation)
+			{
+				// missed the stop; advance target and reset stopping flags
+				State.bIsStopping = false;
+				State.bAtStation = false;
+				State.PreviousStationIndex = State.TargetStationIdx;
+				State.TargetStationIdx = RogueTrainUtility::FindNextStation(*TrackSharedFragment.Spline, TrackSharedFragment.Platforms, TrackFollowFragment.Alpha);
+			}
 			
 			if (!State.bAtStation)
 			{
@@ -86,8 +95,18 @@ void URogueTrainStationDetectProcessor::Execute(FMassEntityManager& EntityManage
 					State.bIsStopping = false;
 					State.PreviousStationIndex = State.TargetStationIdx;
 					State.TargetStationIdx = (State.TargetStationIdx + 1) % TrackSharedFragment.StationEntities.Num();
+
+					// Inform station we are departing, free up dock
+					if (!TrackSharedFragment.StationEntities.IsValidIndex(State.TargetStationIdx)) continue;			
+					const FMassEntityHandle PreviousStationEntity = TrackSharedFragment.StationEntities[State.PreviousStationIndex].Value;
+					if (auto* PreviousStationFragment = EntityManager.GetFragmentDataPtr<FRogueStationFragment>(PreviousStationEntity))
+					{
+						PreviousStationFragment->DockedTrain = FMassEntityHandle();
+					}
 				}
 			}
+			
+			State.PrevAlpha = TrackFollowFragment.Alpha;
 		}
 	});	
 }

@@ -20,7 +20,8 @@ public class RogueMassExample : ModuleRules
 			"MassCrowd",
 			"MassLOD",
 			"DeveloperSettings",
-			"StructUtils"
+			"StructUtils",
+			"UMG"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

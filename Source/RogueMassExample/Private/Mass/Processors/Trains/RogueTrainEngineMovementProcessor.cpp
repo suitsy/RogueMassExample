@@ -43,41 +43,78 @@ void URogueTrainEngineMovementProcessor::Execute(FMassEntityManager& EntityManag
 		const auto TrackFollowFragments = SubContext.GetMutableFragmentView<FRogueTrainTrackFollowFragment>();
 		const auto StateView  = SubContext.GetMutableFragmentView<FRogueTrainStateFragment>();
 		const auto TransformView = SubContext.GetMutableFragmentView<FTransformFragment>();
+		const int32 NumEntities = SubContext.GetNumEntities();
 
-		for (int32 i = 0; i < SubContext.GetNumEntities(); ++i)
+		for (int32 i = 0; i < NumEntities; ++i)
 		{
+			const FMassEntityHandle Entity = SubContext.GetEntity(i);
 			auto& TrackFollowFragment = TrackFollowFragments[i];
 			const auto& State  = StateView[i];
+			FTransform& TrainTransform = TransformView[i].GetMutableTransform();
+			if (!TrackSharedFragment.StationEntities.IsValidIndex(State.TargetStationIdx)) continue;
 
-			float TargetSpeed = State.bIsStopping ? Settings->StationApproachSpeed : Settings->LeadCruiseSpeed;
-			TargetSpeed *= State.bAtStation ? 0.f : FMath::Clamp(State.HeadwaySpeedScale, 0.f, 1.f);
+			// Handle platform approach			
+			/*const auto& PlatformData = TrackSharedFragment.Platforms[State.TargetStationIdx];
+			const float DockAlpha = PlatformData.DockAlpha; // normalized [0..1)
+			const float DistAlpha = RogueTrainUtility::ArcDistanceWrapped(TrackFollowFragment.Alpha, DockAlpha);
+			const float DistStation = DistAlpha * TrackSharedFragment.TrackLength;
+			const float StopRadius = Settings->StationStopRadius;
+			const float ApproachWindow = StopRadius + State.TrainLength;
+			const bool bApproachingStation = (DistStation <= ApproachWindow);
+			bool bCanDockStation = false;*/
 			
-			TrackFollowFragment.Speed = TargetSpeed;
+						
+			/*const FMassEntityHandle StationEntity = TrackSharedFragment.StationEntities[State.TargetStationIdx].Value;
+			if (auto* StationFragment = EntityManager.GetFragmentDataPtr<FRogueStationFragment>(StationEntity))
+			{
+				if (!StationFragment->DockedTrain.IsValid())
+				{
+					StationFragment->DockedTrain = Entity;
+				}
+				
+				bCanDockStation = (StationFragment->DockedTrain == Entity);
+			}
+
+			auto SmoothStep = [](float Scale)
+			{
+				Scale = FMath::Clamp(Scale, 0.f, 1.f);
+				return Scale * Scale * (3.f - 2.f * Scale);
+			};*/
+			
+			float TargetSpeed = Settings->LeadCruiseSpeed;
+			TargetSpeed *= State.HeadwaySpeedScale;
+
+			if (State.bAtStation)
+			{
+				TargetSpeed = 0.f;
+			}
+			else if (State.bIsStopping)
+			{
+				TargetSpeed = FMath::Min(TargetSpeed, Settings->StationApproachSpeed);
+			}
+
+			// If approaching this station but cannot dock yet, taper to stop
+			/*if (bApproachingStation && !bCanDockStation && !State.bAtStation)
+			{
+				const float HoldScale = SmoothStep(DistStation / ApproachWindow);
+				TargetSpeed = FMath::Max(TargetSpeed * HoldScale, 0.f);
+			}*/
+
+			// Use 'target' for your acceleration model
+			TrackFollowFragment.Speed = FMath::FInterpTo(TrackFollowFragment.Speed, TargetSpeed, SubContext.GetDeltaTimeSeconds(), 2.f);
 			TrackFollowFragment.Alpha = RogueTrainUtility::WrapTrackAlpha(TrackFollowFragment.Alpha + (TrackFollowFragment.Speed * SubContext.GetDeltaTimeSeconds()) / TrackSharedFragment.TrackLength );
 
-			//RogueTrainUtility::SampleSpline(TrackSharedFragment, TrackFollowFragment.Alpha, TrackFollowFragment.WorldPos, TrackFollowFragment.WorldFwd);
-
 			RogueTrainUtility::FSplineStationSample SplineSample;
-			if (!RogueTrainUtility::GetStationSplineSample(TrackSharedFragment, TrackFollowFragment.Alpha, 0, 0.f, RideHeight, SplineSample))
+			if (!RogueTrainUtility::GetSplineSample(TrackSharedFragment, TrackFollowFragment.Alpha, 0, 0.f, RideHeight, SplineSample))
 				continue;
 
 			TrackFollowFragment.Alpha = SplineSample.Alpha;
 			TrackFollowFragment.WorldPos = SplineSample.Location;
 			TrackFollowFragment.WorldFwd = SplineSample.Forward;
 			
-			FTransform& TrainTransform = TransformView[i].GetMutableTransform();
 			TrainTransform = SplineSample.World;
 			const FQuat Rot = FRotationMatrix::MakeFromXZ(SplineSample.Forward, FVector::UpVector).ToQuat();
 			TrainTransform.SetRotation(Rot);
-			
-			// Build an orientation (forward = tangent, up = world up or spline up if you have it)
-			/*const FVector Fwd = TrackFollowFragment.WorldFwd.GetSafeNormal();
-			const FQuat Rot = FRotationMatrix::MakeFromXZ(Fwd, FVector::UpVector).ToQuat();
-
-			// Write to the transform fragment
-			FTransform& TrainTransform = TransformView[i].GetMutableTransform();
-			TrainTransform.SetLocation(TrackFollowFragment.WorldPos);
-			TrainTransform.SetRotation(Rot);*/
 		}
 	});
 }

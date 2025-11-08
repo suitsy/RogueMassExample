@@ -59,7 +59,7 @@ void URogueTrainCarriageFollowProcessor::Execute(FMassEntityManager& EntityManag
 
 			RogueTrainUtility::FSplineStationSample SplineSample;
 			const float OffsetDist = FMath::Max(1, Link.CarriageIndex) * Spacing;
-			if (!RogueTrainUtility::GetStationSplineSample(TrackSharedFragment, LeadFollow->Alpha, -OffsetDist, 0.f, RideHeight, SplineSample))
+			if (!RogueTrainUtility::GetSplineSample(TrackSharedFragment, LeadFollow->Alpha, -OffsetDist, 0.f, RideHeight, SplineSample))
 				continue;			
 
 			// Update carriage follow state

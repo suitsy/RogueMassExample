@@ -219,7 +219,8 @@ struct ROGUEMASSEXAMPLE_API FRogueStationFragment : public FMassFragment
 	
 	int32 StationIndex = INDEX_NONE;
 	FVector WorldPosition = FVector::ZeroVector;
-	FVector WorldTrackPoint = FVector::ZeroVector;	
+	FVector WorldTrackPoint = FVector::ZeroVector;
+	FMassEntityHandle DockedTrain = FMassEntityHandle();
 };
 
 USTRUCT()
@@ -237,6 +238,7 @@ struct ROGUEMASSEXAMPLE_API FRogueTrainStateFragment : public FMassFragment
 	FMassEntityHandle TargetStation = FMassEntityHandle();
 	int32 TargetStationIdx = INDEX_NONE;
 	int32 PreviousStationIndex = INDEX_NONE;
+	float TrainLength = 0.f;
 };
 
 USTRUCT()

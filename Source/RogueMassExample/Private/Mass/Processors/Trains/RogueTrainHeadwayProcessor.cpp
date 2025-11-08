@@ -18,7 +18,7 @@ URogueTrainHeadwayProcessor::URogueTrainHeadwayProcessor(): EntityQuery(*this)
 void URogueTrainHeadwayProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
 	EntityQuery.AddRequirement<FRogueTrainTrackFollowFragment>(EMassFragmentAccess::ReadOnly);
-	EntityQuery.AddRequirement<FRogueTrainStateFragment>( EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FRogueTrainStateFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddTagRequirement<FRogueTrainEngineTag>(EMassFragmentPresence::All);
 	EntityQuery.RegisterWithProcessor(*this);
 }
@@ -34,9 +34,9 @@ void URogueTrainHeadwayProcessor::Execute(FMassEntityManager& EntityManager, FMa
 	const auto* Settings = GetDefault<URogueDeveloperSettings>();
 	if (!Settings) return;
 
-	const float TrackLength = TrackSharedFragment.TrackLength;
-	const float MinGap = Settings ? Settings->MinHeadway : 1500.f;
-	const float FullGap = MinGap * 2.f;
+	const float TrackLength = TrackSharedFragment.TrackLength;	
+	const float EngineLength = Settings ? Settings->EngineLength : 1200.f;
+	const float CarriageLength = Settings ? Settings->CarriageLength : 1000.f; 
 	const float Spacing = (Settings ? Settings->CarriageSpacing : 8.f);	
 
 	if(TrackLength <= 0.f) return;
@@ -66,8 +66,8 @@ void URogueTrainHeadwayProcessor::Execute(FMassEntityManager& EntityManager, FMa
 				NumCars = TrainSubsystem->CarriageCounts[SubContext.GetEntity(i)];
 			}
 			
-			const float TrainLength = NumCars * Spacing;
-			const float DeltaTime = TrainLength / TrackLength;
+			State.TrainLength = EngineLength + NumCars * CarriageLength;
+			const float DeltaTime = State.TrainLength / TrackLength;
 			const float TailAlpha = RogueTrainUtility::WrapTrackAlpha(LeadAlpha - DeltaTime);
 
 			Engines.Add({ SubContext.GetEntity(i), LeadAlpha, TailAlpha });
@@ -78,10 +78,13 @@ void URogueTrainHeadwayProcessor::Execute(FMassEntityManager& EntityManager, FMa
 
 	Algo::SortBy(Engines, &FEntry::LeadAlpha);		
 
-	auto GapToScale = [&](const float Gap)
+	auto GapToScale = [&](const float Gap, const float TrainLength)
 	{
+		const float MinGap = Settings ? TrainLength : 1500.f;
+		const float FullGap = MinGap * 2.f;
 		const float t = FMath::Clamp((Gap - MinGap) / (FullGap - MinGap), 0.f, 1.f);
-		return t * t * (3.f - 2.f * t);
+		//return t * t * (3.f - 2.f * t); //(smoothstep)
+		return FMath::Pow(t, 1.5f); //(ease in)
 	};
 
 	// Check gap to next engine's tail
@@ -96,7 +99,29 @@ void URogueTrainHeadwayProcessor::Execute(FMassEntityManager& EntityManager, FMa
 
 		if (auto* State = EntityManager.GetFragmentDataPtr<FRogueTrainStateFragment>(Current.EntityHandle))
 		{
-			const float Scale = GapToScale(Gap);
+			const float Scale = GapToScale(Gap, State->TrainLength);
+			
+			if (const FRogueTrainTrackFollowFragment* Follow = EntityManager.GetFragmentDataPtr<FRogueTrainTrackFollowFragment>(Current.EntityHandle))
+			{
+				int32 TargetIdx = State->TargetStationIdx;
+				if (TargetIdx == INDEX_NONE)
+				{
+					// If you no longer store alphas, call your “next station” helper here
+					TargetIdx = RogueTrainUtility::FindNextStation(*TrackSharedFragment.Spline, TrackSharedFragment.Platforms, Follow->Alpha);
+				}
+
+				if (TargetIdx != INDEX_NONE)
+				{
+					const float StationAlpha = TrackSharedFragment.GetStationAlphaByIndex(TargetIdx);
+					const float DistToStation = RogueTrainUtility::ArcDistanceWrapped(Follow->Alpha, StationAlpha) * TrackLength;
+
+					if (DistToStation <= Gap || State->bIsStopping || State->bAtStation)
+					{
+						State->HeadwaySpeedScale = 1.f; // station logic wins
+					}
+				}
+			}
+			
 			State->HeadwaySpeedScale = FMath::Min(State->HeadwaySpeedScale, Scale);
 		}
 	}

@@ -18,7 +18,6 @@ URoguePassengerSpawnProcessor::URoguePassengerSpawnProcessor(): EntityQuery(*thi
 void URoguePassengerSpawnProcessor::ConfigureQueries(const TSharedRef<FMassEntityManager>& EntityManager)
 {
 	EntityQuery.AddRequirement<FRogueStationQueueFragment>(EMassFragmentAccess::ReadWrite);
-	EntityQuery.AddRequirement<FRogueStationFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddTagRequirement<FRogueTrainStationTag>(EMassFragmentPresence::All);
 	EntityQuery.RegisterWithProcessor(*this);
 }

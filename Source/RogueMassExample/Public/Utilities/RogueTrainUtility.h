@@ -12,7 +12,6 @@ namespace RogueTrainUtility
 	int32 FindNextStation(const USplineComponent& Spline,const TArray<FRoguePlatformData>& Platforms, const float CurrentAlpha);
 	float AlphaAtWorld(const USplineComponent& Spline, const FVector& WorldPos);
 	float ArcDistanceWrapped(const float FromAlpha, const float ToAlpha);
-	void SampleSpline(const FRogueTrackSharedFragment& TrackSharedFragment, const float Alpha, FVector& OutPos, FVector& OutFwd);
 	
 	struct FSplineStationSample
 	{
@@ -33,7 +32,7 @@ namespace RogueTrainUtility
 	 *  @param VerticalOffsetCm Vertical offset in cm
 	 *  @param Out				Spline sample output
 	 */
-	bool GetStationSplineSample(
+	bool GetSplineSample(
 		const FRogueTrackSharedFragment& Track,
 		const float StationTrackAlpha,
 		const float AlongOffsetCm,
@@ -42,9 +41,9 @@ namespace RogueTrainUtility
 		FSplineStationSample& Out);
 
 	/** Convenience overload: zero offsets */
-	inline bool GetStationSplineSample(const FRogueTrackSharedFragment& TrackSharedFragment, const float StationTrackAlpha, FSplineStationSample& Out)
+	inline bool GetSplineSample(const FRogueTrackSharedFragment& TrackSharedFragment, const float TrackAlpha, FSplineStationSample& Out)
 	{
-		return GetStationSplineSample(TrackSharedFragment, StationTrackAlpha, /*Along*/0.f, /*Lat*/0.f, /*Z*/0.f, Out);
+		return GetSplineSample(TrackSharedFragment, TrackAlpha, /*Along*/0.f, /*Lat*/0.f, /*Z*/0.f, Out);
 	}
 
 	FTransform SampleTrackFrame(const USplineComponent& Spline, float Alpha);

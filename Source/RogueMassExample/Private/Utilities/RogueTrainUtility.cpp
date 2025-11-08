@@ -14,11 +14,11 @@ int32 RogueTrainUtility::FindNextStation(const USplineComponent& Spline,const TA
 
 	for (int32 i = 0; i < Platforms.Num(); ++i)
 	{
-		const FVector Ref = Platforms[i].Center; // or Dock position if you have one
+		const FVector Ref = Platforms[i].Center; 
 		const float StationAlpha = AlphaAtWorld(Spline, Ref);
 
 		const float Arc = ArcDistanceWrapped(CurrentAlpha, StationAlpha);
-		if (Arc > KINDA_SMALL_NUMBER && Arc < BestArc) // ignore “at current alpha”
+		if (Arc > KINDA_SMALL_NUMBER && Arc < BestArc) 
 		{
 			BestArc = Arc;
 			BestIdx = i;
@@ -42,18 +42,7 @@ float RogueTrainUtility::ArcDistanceWrapped(const float FromAlpha, const float T
 	return d; 
 }
 
-void RogueTrainUtility::SampleSpline(const FRogueTrackSharedFragment& TrackSharedFragment, const float Alpha, FVector& OutPos, FVector& OutFwd)
-{
-	if (const USplineComponent* Spline = TrackSharedFragment.Spline.Get())
-	{
-		const float Distance = Alpha * TrackSharedFragment.TrackLength;
-		OutPos = Spline->GetLocationAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::World);
-		const FVector Tangent = Spline->GetDirectionAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::World);
-		OutFwd = Tangent.GetSafeNormal();
-	}
-}
-
-bool RogueTrainUtility::GetStationSplineSample(const FRogueTrackSharedFragment& Track, const float StationTrackAlpha,
+bool RogueTrainUtility::GetSplineSample(const FRogueTrackSharedFragment& Track, const float StationTrackAlpha,
 	const float AlongOffsetCm, const float LateralOffsetCm, const float VerticalOffsetCm, FSplineStationSample& Out)
 {
 	const USplineComponent* Spline = Track.Spline.Get();
@@ -61,7 +50,7 @@ bool RogueTrainUtility::GetStationSplineSample(const FRogueTrackSharedFragment& 
 
 	const float Len = FMath::Max(1.f, Track.TrackLength);
 	const float RawDist = StationTrackAlpha * Len + AlongOffsetCm;
-	float Dist = FMath::Fmod(RawDist, Len); // wrap to [0, Len)
+	float Dist = FMath::Fmod(RawDist, Len); 
 	if (Dist < 0.f) Dist += Len; 
 
 	// Grab full transform at distance (world space)
@@ -123,17 +112,15 @@ void RogueTrainUtility::BuildPlatformSegment(const USplineComponent& Spline, con
 	Out.End = Center + Out.Fwd * PlatformHalfLength;
 	Out.PlatformLength = StationConfigData.PlatformConfig.PlatformLength;
 	Out.Alpha = StationConfigData.TrackAlpha;
-	const float OffsetAlongCm = PlatformHalfLength - 25.f;
-	const float TrackLength = Spline.GetSplineLength();
-	const float CenterDist = StationConfigData.TrackAlpha * TrackLength;
-	float DockDist = FMath::Fmod(CenterDist + OffsetAlongCm, TrackLength);
-	if (DockDist < 0.f) DockDist += TrackLength;
-
-	Out.DockAlpha = (TrackLength > 0.f) ? (DockDist / TrackLength) : StationConfigData.TrackAlpha;
 	Out.TrackOffset = StationConfigData.PlatformConfig.TrackOffset;
 	Out.TrackSide = StationConfigData.PlatformConfig.Side;
+	
+	const float TrackLength = Spline.GetSplineLength();
+	const FVector DockPos = Out.End - Out.Fwd * 200.f;
+	const float DockDist = Spline.GetDistanceAlongSplineAtLocation(DockPos, ESplineCoordinateSpace::World);
+	Out.DockAlpha = (TrackLength > 0.f) ? RogueTrainUtility::WrapTrackAlpha(DockDist / TrackLength) : StationConfigData.TrackAlpha;
 
-	// Bake waiting/spawn points aligned to the straight platform
+	// Bake waiting/spawn points aligned to the platform
 	Out.WaitingPoints.Reset();
 	Out.SpawnPoints.Reset();
 
@@ -178,7 +165,7 @@ void RogueTrainUtility::ComputeConsistPlacement(const FRogueTrackSharedFragment&
 	{
 		RogueTrainUtility::FSplineStationSample Sample;
 		const float Alpha = WrappedAlpha(Dist);
-		if (!RogueTrainUtility::GetStationSplineSample(Track, Alpha, Sample))
+		if (!RogueTrainUtility::GetSplineSample(Track, Alpha, Sample))
 			return { Alpha, FTransform::Identity };
 
 		const FVector Up = Sample.Up.IsNearlyZero() ? FVector::UpVector : Sample.Up;

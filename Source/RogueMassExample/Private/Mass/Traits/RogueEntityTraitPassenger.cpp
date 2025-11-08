@@ -9,5 +9,4 @@ void URogueEntityTraitPassenger::BuildTemplate(FMassEntityTemplateBuildContext& 
 {
 	BuildContext.AddTag<FRogueTrainPassengerTag>();
 	BuildContext.AddFragment<FRoguePassengerFragment>();
-	BuildContext.AddFragment<FRogueStationFragment>();
 }
